@@ -1,4 +1,5 @@
 agno
+ag-ui-protocol
 openai
 fastapi
 sqlalchemy
