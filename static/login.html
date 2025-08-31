@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <title>Sprachtrainer - Anmelden</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .login-container {
+        max-width: 400px;
+        margin: 100px auto;
+        padding: 2rem;
+        background: var(--bg);
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+      
+      .login-title {
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 2rem;
+        color: var(--text);
+      }
+      
+      .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      
+      .form-label {
+        font-weight: 500;
+        color: var(--text);
+      }
+      
+      .form-input {
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 1rem;
+        transition: border-color 0.2s;
+      }
+      
+      .form-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+      
+      .login-button {
+        padding: 0.75rem 1.5rem;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      
+      .login-button:hover:not(:disabled) {
+        background: #2563eb;
+      }
+      
+      .login-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      
+      .error-message {
+        color: #ef4444;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        display: none;
+      }
+      
+      .error-message.show {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-container">
+      <h1 class="login-title">Sprachtrainer</h1>
+      <form class="login-form" id="loginForm">
+        <div class="form-group">
+          <label class="form-label" for="password">Passwort</label>
+          <input
+            class="form-input"
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Passwort eingeben..."
+            required
+            autofocus
+          />
+        </div>
+        <button class="login-button" type="submit" id="loginButton">
+          Anmelden
+        </button>
+        <div class="error-message" id="errorMessage"></div>
+      </form>
+    </div>
+
+    <script>
+      const form = document.getElementById('loginForm');
+      const passwordInput = document.getElementById('password');
+      const loginButton = document.getElementById('loginButton');
+      const errorMessage = document.getElementById('errorMessage');
+
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.classList.add('show');
+      }
+
+      function hideError() {
+        errorMessage.classList.remove('show');
+      }
+
+      function setLoading(loading) {
+        loginButton.disabled = loading;
+        loginButton.textContent = loading ? 'Anmelden...' : 'Anmelden';
+      }
+
+      // Get redirect URL from query params
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirectUrl = urlParams.get('redirect') || '/';
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const password = passwordInput.value.trim();
+        if (!password) {
+          showError('Bitte Passwort eingeben.');
+          return;
+        }
+
+        hideError();
+        setLoading(true);
+
+        try {
+          const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              password: password,
+              redirect: redirectUrl
+            }),
+          });
+
+          if (response.ok) {
+            // Login successful, redirect will happen automatically
+            window.location.href = redirectUrl;
+          } else {
+            const data = await response.json();
+            showError(data.detail || 'Anmeldung fehlgeschlagen.');
+          }
+        } catch (error) {
+          showError('Verbindung fehlgeschlagen. Bitte erneut versuchen.');
+          console.error('Login error:', error);
+        } finally {
+          setLoading(false);
+        }
+      });
+
+      // Focus password input on page load
+      passwordInput.focus();
+    </script>
+  </body>
+</html>
