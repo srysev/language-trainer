@@ -133,6 +133,6 @@ def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 if __name__ == "__main__":
-    # Optional auch: fastapi_app.serve(app="app:app", port=3000, reload=True)
+    # Optional auch: fastapi_app.serve(app="app:app", port=8080, reload=True)
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8080, reload=True)

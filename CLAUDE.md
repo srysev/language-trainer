@@ -23,9 +23,13 @@ python trainer_agent_with_tools.py
 
 # Alternative standalone mode
 python trainer_agent.py
+
+# Run with Docker
+docker build -t sprachtrainer .
+docker run -p 8080:8080 -e AUTH_PASSWORD=your_password sprachtrainer
 ```
 
-The main application runs on port 3000 and serves both API endpoints and the web UI.
+The main application runs on port 8080 and serves both API endpoints and the web UI.
 
 ## Architecture Overview
 
@@ -34,8 +38,9 @@ The main application runs on port 3000 and serves both API endpoints and the web
 **FastAPI Application (`app.py`)**
 - Main entry point using Agno framework
 - Combines agent backend with static file serving
-- Routes: `/` (UI), `/static/*` (assets), `/v1/*` (agent API)
+- Routes: `/` (UI), `/static/*` (assets), `/v1/*` (agent API), `/login` (auth)
 - Agent accessible via `?agent_id=sprachtrainer`
+- Password authentication via middleware (optional, set `AUTH_PASSWORD` env var)
 
 **AI Agent System**
 - Uses Agno framework with OpenAI GPT models
