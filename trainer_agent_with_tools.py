@@ -2,9 +2,78 @@ from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from agno.playground import Playground
 import random
+import os
+import logging
 from agno.storage.sqlite import SqliteStorage
+from agno.storage.mongodb import MongoDbStorage
+from agno.memory.v2.db.sqlite import SqliteMemoryDb
+from agno.memory.v2.db.mongodb import MongoMemoryDb
+from agno.memory.v2.memory import Memory
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi
+import certifi
 
+# --- Configuration ---
+MONGO_URL = os.getenv('MONGO_URL')
 agent_storage = "tmp/agents.db"
+
+# --- Logging Setup ---
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# --- MongoDB Client Singleton ---
+_mongodb_client = None
+
+def get_mongodb_client():
+    """Get singleton MongoDB client instance."""
+    global _mongodb_client
+    if _mongodb_client is None:
+        _mongodb_client = MongoClient(
+            MONGO_URL,
+            server_api=ServerApi("1"),
+            tls=True,
+            tlsCAFile=certifi.where(),
+            serverSelectionTimeoutMS=30000,
+        )
+    return _mongodb_client
+
+# --- Storage and Memory initialization ---
+def get_storage_and_memory():
+    """Initialize both storage and memory with shared configuration."""
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    
+    if environment == "production":
+        logger.info("Initializing MongoDB storage and memory for production...")
+        try:
+            client = get_mongodb_client()  # Nur einmal initialisiert
+            
+            storage = MongoDbStorage(
+                client=client,
+                db_name="language_trainer",
+                collection_name="language_trainer_storage"
+            )
+            
+            memory_db = MongoMemoryDb(
+                client=client,  # Gleicher Client!
+                db_name="language_trainer",
+                collection_name="language_trainer_memory"
+            )
+            memory = Memory(db=memory_db)
+            
+            logger.info("MongoDB storage and memory initialized")
+            return storage, memory
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB storage/memory: {e}")
+            logger.info("Falling back to SQLite storage and memory")
+    
+    # SQLite Fallback
+    logger.info("Using SQLite storage and memory")
+    storage = SqliteStorage(table_name="trainer", db_file=agent_storage)
+    memory_db = SqliteMemoryDb(db_file="tmp/trainer_memory.db")
+    memory = Memory(db=memory_db)
+    
+    return storage, memory
 
 def generate_task(sentence_with_blank: str, correct_option: str, wrong_option: str) -> str:
     """
@@ -25,6 +94,9 @@ def generate_task(sentence_with_blank: str, correct_option: str, wrong_option: s
         option_line = f"Optionen: {wrong_option} / {correct_option}"
     
     return f"{sentence_with_blank}<br>{option_line}"
+
+# Initialize storage and memory
+storage, memory = get_storage_and_memory()
 
 trainer = Agent(
     name="Sprachtrainer",
@@ -67,7 +139,9 @@ Aufgabenregeln:
 - Keine Aufgaben, bei denen keine oder beide passen.
 - Keine Meta-Fragen wie "Weiter?" oder "Bereit?".
 """,
-    storage=SqliteStorage(table_name="trainer", db_file=agent_storage),
+    storage=storage,
+    memory=memory,
+    enable_agentic_memory=True,
     tools=[generate_task],
     add_history_to_messages=True,
     show_tool_calls=False,

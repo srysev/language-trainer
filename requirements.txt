@@ -4,3 +4,5 @@ openai
 fastapi
 sqlalchemy
 uvicorn
+pymongo
+certifi
