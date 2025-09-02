@@ -6,3 +6,4 @@ sqlalchemy
 uvicorn
 pymongo
 certifi
+python-telegram-bot

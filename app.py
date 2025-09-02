@@ -2,6 +2,7 @@
 import os
 import hashlib
 import secrets
+import logging
 from fastapi import Request, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +10,9 @@ from pydantic import BaseModel
 from agno.app.fastapi.app import FastAPIApp
 
 from trainer_agent_with_tools import trainer  # dein vorhandener Agent
+
+# --- Logging Setup ---
+logger = logging.getLogger(__name__)
 
 # --- Auth Configuration ---
 EXPECTED_TOKEN = None
@@ -45,6 +49,8 @@ fastapi_app = FastAPIApp(
 # 👉 Das ist unsere EINZIGE FastAPI-App
 app = fastapi_app.get_app()  # Prefix default: /v1
 
+# Telegram auth is handled separately in /telegram/webhook endpoint
+
 # --- Auth Middleware ---
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -57,7 +63,7 @@ async def auth_middleware(request: Request, call_next):
         return response
     
     # Define public paths that don't require authentication
-    public_paths = ["/login", "/api/login", "/favicon.ico"]
+    public_paths = ["/login", "/api/login", "/favicon.ico", "/telegram/webhook"]
     public_static_extensions = [".css", ".js", ".png", ".ico", ".svg"]
     
     # Check if current path is public
@@ -68,11 +74,12 @@ async def auth_middleware(request: Request, call_next):
         response = await call_next(request)
         return response
     
-    # Check for valid authentication cookie
+    # Check web authentication (cookies)
     auth_token = request.cookies.get("auth_token")
     expected_token = get_expected_token()
+    web_auth_valid = auth_token and expected_token and auth_token == expected_token
     
-    if not auth_token or not expected_token or auth_token != expected_token:
+    if not web_auth_valid:
         # Redirect to login page with return URL
         return RedirectResponse(
             url=f"/login?redirect={request.url.path}",
@@ -127,6 +134,45 @@ async def login(request: LoginRequest):
     )
     
     return response
+
+# --- Telegram Webhook ---
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    """Handle incoming Telegram webhook updates with built-in security validation."""
+    try:
+        from telegram_bot import create_telegram_application, TELEGRAM_WEBHOOK_SECRET
+        from telegram import Update
+        from telegram.error import InvalidToken
+        
+        # Get the update data
+        update_data = await request.json()
+        
+        # Validate webhook secret if configured (framework handles this automatically)
+        if TELEGRAM_WEBHOOK_SECRET:
+            secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+            if not secret_header or secret_header != TELEGRAM_WEBHOOK_SECRET:
+                logger.warning("Invalid webhook secret token")
+                raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        # Create telegram application (with security configured)
+        application = create_telegram_application()
+        
+        # Initialize application if not already done
+        if not application.running:
+            await application.initialize()
+        
+        # Process the update (framework validates token automatically)  
+        update = Update.de_json(update_data, application.bot)
+        await application.process_update(update)
+        
+        return {"status": "ok"}
+        
+    except InvalidToken as e:
+        logger.error(f"Invalid Telegram bot token: {e}")
+        raise HTTPException(status_code=401, detail="Invalid bot token")
+    except Exception as e:
+        logger.error(f"Error processing telegram webhook: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/")
 def index():

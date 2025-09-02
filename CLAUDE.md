@@ -27,9 +27,74 @@ python trainer_agent.py
 # Run with Docker
 docker build -t sprachtrainer .
 docker run -p 8080:8080 -e AUTH_PASSWORD=your_password sprachtrainer
+
+# Test Telegram bot in polling mode (development)
+python telegram_bot.py
 ```
 
 The main application runs on port 8080 and serves both API endpoints and the web UI.
+
+### Telegram Bot Integration
+
+The application now supports Telegram bot integration alongside the web interface.
+
+**Environment Variables for Telegram:**
+```bash
+# Required for Telegram bot functionality
+export TELEGRAM_BOT_TOKEN="your_bot_token_from_botfather"
+
+# Optional: Webhook secret for production (leave empty for polling mode)
+export TELEGRAM_WEBHOOK_SECRET="your_webhook_secret"
+
+# Shared authentication (same password for web and Telegram)
+export AUTH_PASSWORD="your_password"
+```
+
+**Telegram Bot Setup:**
+1. Create bot with [@BotFather](https://t.me/BotFather) and get token
+2. Set `TELEGRAM_BOT_TOKEN` environment variable
+3. For production: Configure webhook at `/telegram/webhook`
+4. For development: Run `python telegram_bot.py` for polling mode
+
+**User Authentication:**
+- Users must send the `AUTH_PASSWORD` as their first message to authenticate
+- After authentication, normal language training begins
+- Rate limiting: 5 failed attempts → 10 minute block
+
+### Production Deployment with Telegram
+
+**GCP Secrets Setup (required before deployment):**
+```bash
+# Create Telegram bot token secret
+gcloud secrets create kyrill_chat_app_telegram_bot_token \
+  --data-file=<(echo "your_bot_token_from_botfather")
+
+# Verify secrets exist
+gcloud secrets list | grep kyrill_chat_app
+```
+
+**Deployment Options:**
+```bash
+# Basic deployment (no Telegram)
+./deploy.sh --auth-password "your-password"
+
+# With Telegram bot enabled
+./deploy.sh --auth-password "your-password" --enable-telegram
+
+# Backwards compatible (old syntax still works)
+./deploy.sh "your-password"
+```
+
+**Telegram Webhook Configuration:**
+After deployment, configure the Telegram webhook:
+```bash
+# Get your Cloud Run URL from deployment output
+WEBHOOK_URL="https://your-service-url.a.run.app/telegram/webhook"
+BOT_TOKEN="your_bot_token"
+
+# Set webhook
+curl "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook?url=${WEBHOOK_URL}"
+```
 
 ## Architecture Overview
 
