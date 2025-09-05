@@ -174,6 +174,39 @@ async def telegram_webhook(request: Request):
         logger.error(f"Error processing telegram webhook: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# --- Session Info Endpoint ---
+@app.get("/session-info")
+async def get_session_info():
+    # Get session id and user id from the agent
+    session_id = trainer.session_id
+    user_id = getattr(trainer, "user_id", None)
+
+    # Correct: Use .read(), not .get_session()
+    session = trainer.storage.read(session_id, user_id) if session_id else None
+    created_at = session.created_at if session and session.created_at else None
+    from datetime import datetime
+    session_start = (
+        datetime.utcfromtimestamp(created_at).isoformat() if created_at else None
+    )
+
+    messages = trainer.get_messages_for_session() if session_id else []
+    message_count = len(messages)
+    #input_tokens_last = trainer.run_response.metrics.get("input_tokens", [0])[-1]
+    #output_tokens_last = trainer.run_response.metrics.get("output_tokens", [0])[-1]
+    # Session-wide token stats
+    input_tokens_total = trainer.session_metrics.input_tokens
+    output_tokens_total = trainer.session_metrics.output_tokens
+    total_tokens_session = trainer.session_metrics.total_tokens
+
+    return {
+        "session_id": session_id,
+        "session_start": session_start,
+        "message_count": message_count,
+        "input_tokens_total" : input_tokens_total,
+        "output_tokens_total" : output_tokens_total,
+        "total_tokens_session" : total_tokens_session,
+    }
+
 @app.get("/")
 def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
