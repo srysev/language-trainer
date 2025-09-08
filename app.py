@@ -176,30 +176,51 @@ async def telegram_webhook(request: Request):
 
 # --- Session Info Endpoint ---
 @app.get("/session-info")
-async def get_session_info():
+async def get_session_info(request: Request):
     # Get session id and user id from the agent
     session_id = trainer.session_id
     user_id = getattr(trainer, "user_id", None)
+    
+    # Log session info request for web clients
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(f"Session info requested - session_id: {session_id}, client_ip: {client_ip}")
 
     # Correct: Use .read(), not .get_session()
-    session = trainer.storage.read(session_id, user_id) if session_id else None
-    created_at = session.created_at if session and session.created_at else None
-    from datetime import datetime
+    session = trainer.storage.read(session_id, user_id) if session_id and trainer.storage else None
+    created_at = session.created_at if session and hasattr(session, 'created_at') and session.created_at else None
+    from datetime import datetime, timezone
     session_start = (
-        datetime.utcfromtimestamp(created_at).isoformat() if created_at else None
+        datetime.fromtimestamp(created_at, timezone.utc).isoformat() if created_at else None
     )
 
     messages = trainer.get_messages_for_session() if session_id else []
     message_count = len(messages)
-    #input_tokens_last = trainer.run_response.metrics.get("input_tokens", [0])[-1]
-    #output_tokens_last = trainer.run_response.metrics.get("output_tokens", [0])[-1]
-    # Session-wide token stats
-    input_tokens_total = trainer.session_metrics.input_tokens
-    output_tokens_total = trainer.session_metrics.output_tokens
-    total_tokens_session = trainer.session_metrics.total_tokens
+    
+    # Session-wide token stats - protect against None session_metrics
+    session_metrics = getattr(trainer, 'session_metrics', None)
+    input_tokens_total = session_metrics.input_tokens if session_metrics else 0
+    output_tokens_total = session_metrics.output_tokens if session_metrics else 0
+    total_tokens_session = session_metrics.total_tokens if session_metrics else 0
+    
+    # Extract session type and info from session_id
+    session_type = "unknown"
+    session_info = {}
+    if session_id:
+        if session_id.startswith("telegram:"):
+            session_type = "telegram"
+            parts = session_id.split(":")
+            if len(parts) >= 3:
+                session_info = {"user_id": parts[1], "date": parts[2]}
+        elif session_id.startswith("web:"):
+            session_type = "web" 
+            parts = session_id.split(":")
+            if len(parts) >= 3:
+                session_info = {"user_session": parts[1], "date": parts[2]}
 
     return {
         "session_id": session_id,
+        "session_type": session_type,
+        "session_info": session_info,
         "session_start": session_start,
         "message_count": message_count,
         "input_tokens_total" : input_tokens_total,

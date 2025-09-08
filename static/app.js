@@ -10,13 +10,19 @@ function uuid() {
     return "xxxxxx".replace(/x/g, () => ((Math.random() * 36) | 0).toString(36));
 }
 
-function getSessionId() {
-    let id = localStorage.getItem("sprachtrainer_session_id");
+function getUserSessionId() {
+    let id = localStorage.getItem("sprachtrainer_user_session_id");
     if (!id) {
         id = uuid();
-        localStorage.setItem("sprachtrainer_session_id", id);
+        localStorage.setItem("sprachtrainer_user_session_id", id);
     }
     return id;
+}
+
+function getSessionId() {
+    const userSessionId = getUserSessionId();
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD format
+    return `web:${userSessionId}:${today}`;
 }
 
 const sessionId = getSessionId();
@@ -67,6 +73,9 @@ $form.addEventListener("submit", async (e) => {
     setLoading(true);
 
     try {
+        // Log session usage for web clients
+        console.log(`Sending message with session_id: ${sessionId}`);
+        
         const params = new URLSearchParams({
             message: text,
             session_id: sessionId,
