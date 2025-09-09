@@ -1,4 +1,4 @@
-agno
+agno==1.8.2
 ag-ui-protocol
 openai
 fastapi
