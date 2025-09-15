@@ -130,7 +130,7 @@ def get_storage_and_memory():
                 db_name="language_trainer",
                 collection_name="language_trainer_memory"
             )
-            memory = Memory(db=memory_db)
+            memory = Memory(db=memory_db)  # type: ignore
             
             logger.info("MongoDB storage and memory initialized")
             return storage, memory
@@ -147,6 +147,26 @@ def get_storage_and_memory():
     return storage, memory
 
 # --- Memory Management Functions ---
+def get_memory_by_id(memory_instance, user_id, memory_id):
+    """
+    Workaround for defective get_user_memory() in Agno Framework.
+    Uses get_user_memories() and filters manually.
+    
+    Args:
+        memory_instance: Memory instance (agent.memory or global memory)
+        user_id: User ID to search for
+        memory_id: Memory ID to find
+        
+    Returns:
+        UserMemory object or None if not found
+    """
+    try:
+        all_memories = memory_instance.get_user_memories(user_id=user_id)
+        return next((m for m in all_memories if m.memory_id == memory_id), None)
+    except Exception as e:
+        logger.error(f"Error in get_memory_by_id: {e}")
+        return None
+
 def ensure_difficulty_memory(agent):
     """
     Ensure difficulty memory exists and return current difficulty instruction text.
@@ -155,14 +175,13 @@ def ensure_difficulty_memory(agent):
     Returns:
         str: Memory text that serves as key for DIFFICULTY_INSTRUCTIONS
     """
-    try:
-        # Try to retrieve existing memory - FIXED: Correct parameter order
-        memory = agent.memory.get_user_memory(memory_id=DIFFICULTY_MEMORY_ID, user_id=USER_ID)
-        if memory and memory.memory in DIFFICULTY_INSTRUCTIONS:
-            logger.info(f"Retrieved difficulty memory: {memory.memory}")
-            return memory.memory
-    except Exception as e:
-        logger.info(f"No existing difficulty memory found: {e}")
+    # Use workaround function instead of defective get_user_memory
+    memory = get_memory_by_id(agent.memory, USER_ID, DIFFICULTY_MEMORY_ID)
+    if memory and memory.memory in DIFFICULTY_INSTRUCTIONS:
+        logger.info(f"Retrieved difficulty memory: {memory.memory}")
+        return memory.memory
+    else:
+        logger.info("No existing difficulty memory found or invalid content")
     
     # Create initial Level 1 memory
     initial_difficulty_text = "Kyrills aktuelle Schwierigkeitsstufe ist 1"
@@ -199,8 +218,8 @@ def update_difficulty_memory(agent, new_difficulty_text):
     )
     
     try:
-        # FIXED: Correct parameter order for replace_user_memory
-        agent.memory.replace_user_memory(memory_id=DIFFICULTY_MEMORY_ID, memory=new_memory, user_id=USER_ID)
+        # Use add_user_memory as UPSERT (creates or updates)
+        agent.memory.add_user_memory(new_memory, user_id=USER_ID)
         logger.info(f"Updated difficulty memory to: {new_difficulty_text}")
         
         # Update agent instructions immediately
@@ -370,8 +389,8 @@ class TrainerAgent(Agent):
         try:
             from complexity_review_agent import analyze_conversation_difficulty_async
             
-            # Get current difficulty from memory (now that API is fixed)
-            current_memory = self.memory.get_user_memory(memory_id=DIFFICULTY_MEMORY_ID, user_id=USER_ID)
+            # Get current difficulty using workaround function
+            current_memory = get_memory_by_id(self.memory, USER_ID, DIFFICULTY_MEMORY_ID)
             current_difficulty_text = current_memory.memory if current_memory else "Kyrills aktuelle Schwierigkeitsstufe ist 1"
             logger.info(f"Review: Using difficulty from memory: {current_difficulty_text}")
             
