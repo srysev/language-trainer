@@ -46,8 +46,6 @@ gcloud run deploy $SERVICE_NAME \
   --image $IMAGE_NAME \
   --platform managed \
   --region $REGION \
-  --vpc-connector=run-conn-ew1 \
-  --vpc-egress=all-traffic \
   --set-secrets OPENAI_API_KEY=kyrill_chat_app_openai-api-key:latest,MONGO_URL=kyrill_chat_app_mongo_url:latest,TELEGRAM_BOT_TOKEN=language_trainer_telegram_bot_token:latest,TELEGRAM_WEBHOOK_SECRET=language_trainer_telegram_webhook_secret:latest \
   --set-env-vars "$ENV_VARS" \
   --allow-unauthenticated \
